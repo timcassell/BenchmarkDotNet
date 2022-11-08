@@ -38,6 +38,7 @@
                 TargetJob = job,
                 OperationsPerInvoke = $OperationsPerInvoke$,
                 MeasureExtraStats = $MeasureExtraStats$,
+                MeasureSurvivedMemory = $MeasureSurvivedMemory$,
                 BenchmarkName = benchmarkName
             };
 
@@ -123,6 +124,7 @@
             {
                 consumer.Consume(overheadDelegate($PassArguments$));@Unroll@
             }
+            consumer.Clear(); // Necessary for survived memory diagnoser.
         }
 
 #if NETCOREAPP3_0_OR_GREATER
@@ -135,6 +137,7 @@
             {
                 consumer.Consume(overheadDelegate($PassArguments$));
             }
+            consumer.Clear(); // Necessary for survived memory diagnoser.
         }
 
 #if NETCOREAPP3_0_OR_GREATER
@@ -147,6 +150,7 @@
             {
                 consumer.Consume(workloadDelegate($PassArguments$)$ConsumeField$);@Unroll@
             }
+            consumer.Clear(); // Necessary for survived memory diagnoser.
         }
 
 #if NETCOREAPP3_0_OR_GREATER
@@ -159,6 +163,7 @@
             {
                 consumer.Consume(workloadDelegate($PassArguments$)$ConsumeField$);
             }
+            consumer.Clear(); // Necessary for survived memory diagnoser.
         }
         
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoOptimization | System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
