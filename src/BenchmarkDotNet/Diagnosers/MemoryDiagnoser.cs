@@ -34,22 +34,27 @@ namespace BenchmarkDotNet.Diagnosers
 
         public IEnumerable<Metric> ProcessResults(DiagnoserResults diagnoserResults)
         {
-            if (diagnoserResults.GcStats.Gen0Collections > 0 && Config.DisplayGenColumns)
-                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen0, diagnoserResults.GcStats.Gen0Collections / (double)diagnoserResults.GcStats.TotalOperations * 1000);
-            if (diagnoserResults.GcStats.Gen1Collections > 0 && Config.DisplayGenColumns)
-                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen1, diagnoserResults.GcStats.Gen1Collections / (double)diagnoserResults.GcStats.TotalOperations * 1000);
-            if (diagnoserResults.GcStats.Gen2Collections > 0 && Config.DisplayGenColumns)
-                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen2, diagnoserResults.GcStats.Gen2Collections / (double)diagnoserResults.GcStats.TotalOperations * 1000);
-
-            yield return new Metric(AllocatedMemoryMetricDescriptor.Instance, diagnoserResults.GcStats.GetBytesAllocatedPerOperation(diagnoserResults.BenchmarkCase));
-
-            if (Config.IncludeSurvived)
+            if (Config.DisplayGenColumns)
             {
-                yield return new Metric(SurvivedMemoryMetricDescriptor.Instance, diagnoserResults.GcStats.SurvivedBytes);
+                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen0, diagnoserResults.GcStats.Gen0Collections / (double) diagnoserResults.GcStats.TotalOperations * 1000);
+                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen1, diagnoserResults.GcStats.Gen1Collections / (double) diagnoserResults.GcStats.TotalOperations * 1000);
+                yield return new Metric(GarbageCollectionsMetricDescriptor.Gen2, diagnoserResults.GcStats.Gen2Collections / (double) diagnoserResults.GcStats.TotalOperations * 1000);
+            }
+
+            var allocatedBytes = diagnoserResults.GcStats.GetBytesAllocatedPerOperation(diagnoserResults.BenchmarkCase);
+            if (allocatedBytes != null)
+            {
+                yield return new Metric(AllocatedMemoryMetricDescriptor.Instance, allocatedBytes.Value);
+            }
+
+            var survivedBytes = diagnoserResults.GcStats.SurvivedBytes;
+            if (Config.IncludeSurvived && survivedBytes != null)
+            {
+                yield return new Metric(SurvivedMemoryMetricDescriptor.Instance, survivedBytes.Value);
             }
         }
 
-        private class SurvivedMemoryMetricDescriptor : IMetricDescriptor
+        internal class SurvivedMemoryMetricDescriptor : IMetricDescriptor
         {
             internal static readonly IMetricDescriptor Instance = new SurvivedMemoryMetricDescriptor();
 
@@ -63,7 +68,7 @@ namespace BenchmarkDotNet.Diagnosers
             public int PriorityInCategory { get; } = AllocatedMemoryMetricDescriptor.Instance.PriorityInCategory + 1;
         }
 
-        private class GarbageCollectionsMetricDescriptor : IMetricDescriptor
+        internal class GarbageCollectionsMetricDescriptor : IMetricDescriptor
         {
             internal static readonly IMetricDescriptor Gen0 = new GarbageCollectionsMetricDescriptor(0, Column.Gen0);
             internal static readonly IMetricDescriptor Gen1 = new GarbageCollectionsMetricDescriptor(1, Column.Gen1);

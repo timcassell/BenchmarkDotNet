@@ -49,9 +49,9 @@ namespace BenchmarkDotNet.Engines
         private readonly Random random;
         private readonly bool includeExtraStats, includeSurvivedMemory;
 
-        private long survivedBytes;
+        private long? survivedBytes;
         private bool survivedBytesMeasured;
-        private static Func<long> GetTotalBytes { get; set; }
+        private static Func<long?> GetTotalBytes { get; set; }
 
         internal Engine(
             IHost host,
@@ -106,11 +106,11 @@ namespace BenchmarkDotNet.Engines
             }
         }
 
-        private static Func<long> CreateGetTotalBytesFunc()
+        private static Func<long?> CreateGetTotalBytesFunc()
         {
             // Don't try to measure in Mono, Monitoring is not available, and GC.GetTotalMemory is very inaccurate.
             if (RuntimeInformation.IsMono)
-                return () => 0;
+                return () => null;
             try
             {
                 // Docs say this should be available in .NET Core 2.1, but it throws an exception.
@@ -235,18 +235,18 @@ namespace BenchmarkDotNet.Engines
                 if (totalOperations == 1)
                 {
                     // Measure normal invocation for both survived memory and time.
-                    long beforeBytes = GetTotalBytes();
+                    long? beforeBytes = GetTotalBytes();
                     nanoseconds = MeasureAction(action, invokeCount / unrollFactor);
-                    long afterBytes = GetTotalBytes();
+                    long? afterBytes = GetTotalBytes();
                     survivedBytes = afterBytes - beforeBytes;
                 }
                 else
                 {
                     // Measure a single invocation for survived memory, plus normal invocations for time.
                     ++totalOperations;
-                    long beforeBytes = GetTotalBytes();
+                    long? beforeBytes = GetTotalBytes();
                     nanoseconds = MeasureAction(WorkloadActionNoUnroll, 1);
-                    long afterBytes = GetTotalBytes();
+                    long? afterBytes = GetTotalBytes();
                     survivedBytes = afterBytes - beforeBytes;
                     nanoseconds += MeasureAction(action, invokeCount / unrollFactor);
                 }

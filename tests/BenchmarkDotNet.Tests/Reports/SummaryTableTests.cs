@@ -108,5 +108,30 @@ namespace BenchmarkDotNet.Tests.Reports
             // assert
             Assert.True(actual.All(value => "0.0" == value));
         }
+
+        [Fact] // Issue #1783
+        public void MissingValueInMetricColumnIsQuestionMark()
+        {
+            // arrange
+            var config = ManualConfig.Create(DefaultConfig.Instance);
+            var metrics = new[] { new Metric(new FakeMetricDescriptor("metric1", "some legend", "0.0"), 0.0) };
+            bool firstMetricsUsed = false;
+
+            // act
+            var summary = MockFactory.CreateSummary<MockFactory.MockBenchmarkClass>(config, hugeSd: false, benchmarkCase =>
+            {
+                if (!firstMetricsUsed)
+                {
+                    firstMetricsUsed = true;
+                    return metrics;
+                }
+                return System.Array.Empty<Metric>();
+            });
+            var table = new SummaryTable(summary);
+            var actual = table.Columns.First(c => c.Header == "metric1").Content;
+
+            // assert
+            Assert.Equal(new[] { "-", "?" }, actual);
+        }
     }
 }
