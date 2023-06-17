@@ -253,6 +253,9 @@ namespace BenchmarkDotNet.ConsoleArguments
             config.WithOption(ConfigOptions.ApplesToApples, options.ApplesToApples);
             config.WithOption(ConfigOptions.Resume, options.Resume);
 
+            if (config.Options.IsSet(ConfigOptions.GenerateMSBuildBinLog))
+                config.Options |= ConfigOptions.KeepBenchmarkFiles;
+
             if (options.MaxParameterColumnWidth.HasValue)
                 config.WithSummaryStyle(SummaryStyle.Default.WithMaxParameterColumnWidth(options.MaxParameterColumnWidth.Value));
 
@@ -397,6 +400,7 @@ namespace BenchmarkDotNet.ConsoleArguments
                 case RuntimeMoniker.Net50:
                 case RuntimeMoniker.Net60:
                 case RuntimeMoniker.Net70:
+                case RuntimeMoniker.Net80:
                     return baseJob
                         .WithRuntime(runtimeMoniker.GetRuntime())
                         .WithToolchain(CsProjCoreToolchain.From(new NetCoreAppSettings(runtimeId, null, runtimeId, options.CliPath?.FullName, options.RestorePath?.FullName)));
@@ -410,6 +414,9 @@ namespace BenchmarkDotNet.ConsoleArguments
                 case RuntimeMoniker.NativeAot70:
                     return CreateAotJob(baseJob, options, runtimeMoniker, "", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet7/nuget/v3/index.json");
 
+                case RuntimeMoniker.NativeAot80:
+                    return CreateAotJob(baseJob, options, runtimeMoniker, "", "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet8/nuget/v3/index.json");
+
                 case RuntimeMoniker.Wasm:
                     return MakeWasmJob(baseJob, options, RuntimeInformation.IsNetCore ? CoreRuntime.GetCurrentVersion().MsBuildMoniker : "net5.0", runtimeMoniker);
 
@@ -422,6 +429,9 @@ namespace BenchmarkDotNet.ConsoleArguments
                 case RuntimeMoniker.WasmNet70:
                     return MakeWasmJob(baseJob, options, "net7.0", runtimeMoniker);
 
+                case RuntimeMoniker.WasmNet80:
+                    return MakeWasmJob(baseJob, options, "net8.0", runtimeMoniker);
+
                 case RuntimeMoniker.MonoAOTLLVM:
                     return MakeMonoAOTLLVMJob(baseJob, options, RuntimeInformation.IsNetCore ? CoreRuntime.GetCurrentVersion().MsBuildMoniker : "net6.0");
 
@@ -431,11 +441,17 @@ namespace BenchmarkDotNet.ConsoleArguments
                 case RuntimeMoniker.MonoAOTLLVMNet70:
                     return MakeMonoAOTLLVMJob(baseJob, options, "net7.0");
 
+                case RuntimeMoniker.MonoAOTLLVMNet80:
+                    return MakeMonoAOTLLVMJob(baseJob, options, "net8.0");
+
                 case RuntimeMoniker.Mono60:
                     return MakeMonoJob(baseJob, options, MonoRuntime.Mono60);
 
                 case RuntimeMoniker.Mono70:
                     return MakeMonoJob(baseJob, options, MonoRuntime.Mono70);
+
+                case RuntimeMoniker.Mono80:
+                    return MakeMonoJob(baseJob, options, MonoRuntime.Mono80);
 
                 default:
                     throw new NotSupportedException($"Runtime {runtimeId} is not supported");

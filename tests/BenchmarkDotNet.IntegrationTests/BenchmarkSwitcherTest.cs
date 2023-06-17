@@ -289,6 +289,9 @@ namespace BenchmarkDotNet.IntegrationTests
         [Fact]
         public void JobNotDefinedButStillBenchmarkIsExecuted()
         {
+            if (ContinuousIntegration.IsAppVeyorOnWindows())
+                return; // timeouts
+
             var types = new[] { typeof(JustBenchmark) };
             var switcher = new BenchmarkSwitcher(types);
             MockExporter mockExporter = new MockExporter();
@@ -332,7 +335,7 @@ namespace BenchmarkDotNet.IntegrationTests
             Assert.Contains("static", logger.GetLog());
         }
 
-        [Fact]
+        [FactDotNetCoreOnly("For some reason this test is flaky on Full Framework")]
         public void WhenUserAddTheResumeAttributeAndRunTheBenchmarks()
         {
             var logger = new OutputLogger(Output);

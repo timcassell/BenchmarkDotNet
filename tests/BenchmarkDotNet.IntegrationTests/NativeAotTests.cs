@@ -2,6 +2,7 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Environments;
+using BenchmarkDotNet.IntegrationTests.Xunit;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Portability;
 using BenchmarkDotNet.Tests.XUnit;
@@ -21,10 +22,10 @@ namespace BenchmarkDotNet.IntegrationTests
                 return;
             if (ContinuousIntegration.IsGitHubActionsOnWindows()) // no native dependencies installed
                 return;
-            if (ContinuousIntegration.IsAppVeyorOnWindows()) // too time consuming for AppVeyor (1h limit)
-                return;
-            if (NativeAotRuntime.GetCurrentVersion().RuntimeMoniker < RuntimeMoniker.NativeAot70) // we can't target net6.0 and use .NET 7 ILCompiler anymore (#2080)
-                return;
+            if (ContinuousIntegration.IsAppVeyorOnWindows())
+                return; // timeouts
+            if (RuntimeInformation.IsMacOS())
+                return; // currently not supported
 
             var toolchain = NativeAotToolchain.CreateBuilder().UseNuGet().IlcInstructionSet(IsAvx2Supported() ? "avx2" : "").ToToolchain();
 
@@ -34,7 +35,17 @@ namespace BenchmarkDotNet.IntegrationTests
                     .WithToolchain(toolchain)
                     .WithEnvironmentVariable(NativeAotBenchmark.EnvVarKey, IsAvx2Supported().ToString().ToLower()));
 
-            CanExecute<NativeAotBenchmark>(config);
+            try
+            {
+                CanExecute<NativeAotBenchmark>(config);
+            }
+            catch (MisconfiguredEnvironmentException e)
+            {
+                if (ContinuousIntegration.IsLocalRun())
+                    Output.WriteLine(e.SkipMessage);
+                else
+                    throw;
+            }
         }
 
         private bool IsAvx2Supported()

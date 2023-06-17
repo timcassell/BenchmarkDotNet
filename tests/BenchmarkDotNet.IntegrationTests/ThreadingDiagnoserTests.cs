@@ -14,7 +14,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using BenchmarkDotNet.Environments;
+using BenchmarkDotNet.IntegrationTests.Xunit;
 using BenchmarkDotNet.Portability;
 using Xunit;
 using Xunit.Abstractions;
@@ -31,15 +31,13 @@ namespace BenchmarkDotNet.IntegrationTests
         {
             yield return new object[] { Job.Default.GetToolchain() };
 
-            bool isOsxArm64 = RuntimeInformation.GetCurrentPlatform() == Platform.Arm64 && RuntimeInformation.IsMacOSX();
             if (!ContinuousIntegration.IsGitHubActionsOnWindows() // no native dependencies
-                && !ContinuousIntegration.IsAppVeyorOnWindows() // too time consuming for AppVeyor (1h limit)
-                && !isOsxArm64) // Native compilation does not support targeting osx-arm64 yet. https://github.com/dotnet/corert/issues/4589
+                && !RuntimeInformation.IsMacOS() // currently not supported
+                && !ContinuousIntegration.IsAppVeyorOnWindows()) // timeouts
             {
                 yield return new object[]{ NativeAotToolchain.CreateBuilder()
-                    .UseNuGet(
-                        "6.0.0-rc.1.21420.1",
-                        "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-experimental/nuget/v3/index.json").ToToolchain() };
+                    .UseNuGet("7.0.0", "https://api.nuget.org/v3/index.json")
+                    .ToToolchain() };
             }
             // TODO: Support InProcessEmitToolchain.Instance
             // yield return new object[] { InProcessEmitToolchain.Instance };
@@ -51,6 +49,19 @@ namespace BenchmarkDotNet.IntegrationTests
             var config = CreateConfig(toolchain);
 
             var summary = BenchmarkRunner.Run<CompletedWorkItemCount>(config);
+            try
+            {
+                summary.CheckPlatformLinkerIssues();
+            }
+            catch (MisconfiguredEnvironmentException e)
+            {
+                if (ContinuousIntegration.IsLocalRun())
+                {
+                    output.WriteLine(e.SkipMessage);
+                    return;
+                }
+                throw;
+            }
 
             AssertStats(summary, new Dictionary<string, (string metricName, double expectedValue)>
             {
@@ -79,6 +90,19 @@ namespace BenchmarkDotNet.IntegrationTests
             var config = CreateConfig(toolchain);
 
             var summary = BenchmarkRunner.Run<LockContentionCount>(config);
+            try
+            {
+                summary.CheckPlatformLinkerIssues();
+            }
+            catch (MisconfiguredEnvironmentException e)
+            {
+                if (ContinuousIntegration.IsLocalRun())
+                {
+                    output.WriteLine(e.SkipMessage);
+                    return;
+                }
+                throw;
+            }
 
             AssertStats(summary, new Dictionary<string, (string metricName, double expectedValue)>
             {

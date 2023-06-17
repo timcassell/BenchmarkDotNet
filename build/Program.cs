@@ -1,21 +1,22 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Threading.Tasks;
+using Build;
 using Cake.Common;
 using Cake.Common.Build;
 using Cake.Common.Build.AppVeyor;
 using Cake.Common.Diagnostics;
 using Cake.Common.IO;
-using Cake.Common.Net;
 using Cake.Common.Tools.DotNet;
+using Cake.Common.Tools.DotNet.Build;
 using Cake.Common.Tools.DotNet.MSBuild;
+using Cake.Common.Tools.DotNet.Pack;
 using Cake.Common.Tools.DotNet.Restore;
 using Cake.Common.Tools.DotNet.Run;
-using Cake.Common.Tools.DotNetCore.Build;
-using Cake.Common.Tools.DotNetCore.MSBuild;
-using Cake.Common.Tools.DotNetCore.Pack;
-using Cake.Common.Tools.DotNetCore.Test;
+using Cake.Common.Tools.DotNet.Test;
 using Cake.Core;
 using Cake.Core.IO;
 using Cake.FileHelpers;
@@ -41,8 +42,6 @@ public class BuildContext : FrostingContext
     public DirectoryPath ArtifactsDirectory { get; }
     public DirectoryPath ToolsDirectory { get; }
     public DirectoryPath DocsDirectory { get; }
-    public DirectoryPath DocfxDirectory { get; }
-    public FilePath DocfxExeFile { get; }
     public FilePath DocfxJsonFile { get; }
     public DirectoryPath TestOutputDirectory { get; }
 
@@ -59,11 +58,12 @@ public class BuildContext : FrostingContext
     public FilePath IntegrationTestsProjectFile { get; }
     public FilePath TemplatesTestsProjectFile { get; }
     public FilePathCollection AllPackableSrcProjects { get; }
-
-    public DotNetCoreMSBuildSettings MsBuildSettings { get; }
+    
+    public DotNetMSBuildSettings MsBuildSettings { get; }
 
     private IAppVeyorProvider AppVeyor => this.BuildSystem().AppVeyor;
-    public bool IsOnAppVeyorAndNotPr => AppVeyor.IsRunningOnAppVeyor && !AppVeyor.Environment.PullRequest.IsPullRequest;
+    public bool IsRunningOnAppVeyor => AppVeyor.IsRunningOnAppVeyor;
+    public bool IsOnAppVeyorAndNotPr => IsRunningOnAppVeyor && !AppVeyor.Environment.PullRequest.IsPullRequest;
     public bool IsOnAppVeyorAndBdnNightlyCiCd => IsOnAppVeyorAndNotPr && AppVeyor.Environment.Repository.Branch == "master" && this.IsRunningOnWindows();
     public bool IsLocalBuild => this.BuildSystem().IsLocalBuild;
     public bool IsCiBuild => !this.BuildSystem().IsLocalBuild;
@@ -79,8 +79,6 @@ public class BuildContext : FrostingContext
         ArtifactsDirectory = RootDirectory.Combine("artifacts");
         ToolsDirectory = RootDirectory.Combine("tools");
         DocsDirectory = RootDirectory.Combine("docs");
-        DocfxDirectory = ToolsDirectory.Combine("docfx");
-        DocfxExeFile = DocfxDirectory.CombineWithFilePath("docfx.exe");
         DocfxJsonFile = DocsDirectory.CombineWithFilePath("docfx.json");
         TestOutputDirectory = RootDirectory.Combine("TestResults");
 
@@ -102,7 +100,7 @@ public class BuildContext : FrostingContext
         AllPackableSrcProjects = new FilePathCollection(context.GetFiles(RootDirectory.FullPath + "/src/**/*.csproj")
             .Where(p => !p.FullPath.Contains("Disassembler")));
 
-        MsBuildSettings = new DotNetCoreMSBuildSettings
+        MsBuildSettings = new DotNetMSBuildSettings
         {
             MaxCpuCount = 1
         };
@@ -117,15 +115,15 @@ public class BuildContext : FrostingContext
         }
     }
 
-    private DotNetCoreTestSettings GetTestSettingsParameters(FilePath logFile, string tfm)
+    private DotNetTestSettings GetTestSettingsParameters(FilePath logFile, string tfm)
     {
-        var settings = new DotNetCoreTestSettings
+        var settings = new DotNetTestSettings
         {
             Configuration = BuildConfiguration,
             Framework = tfm,
             NoBuild = true,
             NoRestore = true,
-            Loggers = new[] { "trx", $"trx;LogFileName={logFile.FullPath}" }
+            Loggers = new[] { "trx", $"trx;LogFileName={logFile.FullPath}", "console;verbosity=detailed" }
         };
         // force the tool to not look for the .dll in platform-specific directory
         settings.EnvironmentVariables["Platform"] = "";
@@ -145,13 +143,7 @@ public class BuildContext : FrostingContext
         this.Information("DocfxChangelogDownload: " + version);
         // Required environment variables: GITHUB_PRODUCT, GITHUB_TOKEN
         var changeLogBuilderDirectory = ChangeLogGenDirectory.Combine("ChangeLogBuilder");
-        var changeLogBuilderProjectFile = changeLogBuilderDirectory.CombineWithFilePath("ChangeLogBuilder.csproj");
-        this.DotNetRun(changeLogBuilderProjectFile.FullPath,
-            new ProcessArgumentBuilder().Append(version).Append(versionPrevious).Append(lastCommit),
-            new DotNetRunSettings()
-            {
-                WorkingDirectory = changeLogBuilderDirectory
-            });
+        ChangeLogBuilder.Run(changeLogBuilderDirectory, version, versionPrevious, lastCommit).Wait();
 
         var src = changeLogBuilderDirectory.CombineWithFilePath(version + ".md");
         var dest = ChangeLogGenDirectory.Combine("details").CombineWithFilePath(version + ".md");
@@ -200,14 +192,15 @@ public class BuildContext : FrostingContext
         this.FileWriteText(release, content.ToString());
     }
 
-    public void RunDocfx(FilePath docfxJson, string args = "")
+    public void RunDocfx(FilePath docfxJson)
     {
-        this.Information($"Running docfx for '{docfxJson}' with args '{args}'");
-        if (!this.IsRunningOnWindows())
-            this.StartProcess("mono",
-                new ProcessSettings { Arguments = DocfxExeFile.FullPath + " " + docfxJson + " " + args });
-        else
-            this.StartProcess(DocfxExeFile.FullPath, new ProcessSettings { Arguments = docfxJson + " " + args });
+        this.Information($"Running docfx for '{docfxJson}'");
+        
+        var currentDirectory = Directory.GetCurrentDirectory();
+        Directory.SetCurrentDirectory(docfxJson.GetDirectory().FullPath);
+        Microsoft.DocAsCode.Dotnet.DotnetApiCatalog.GenerateManagedReferenceYamlFiles(docfxJson.FullPath).Wait();
+        Microsoft.DocAsCode.Docset.Build(docfxJson.FullPath).Wait();
+        Directory.SetCurrentDirectory(currentDirectory);
     }
 
     public void GenerateRedirects()
@@ -228,8 +221,6 @@ public class BuildContext : FrostingContext
 
 public static class DocumentationHelper
 {
-    public const string DocFxVersion = "2.59.4";
-
     public static readonly string[] BdnAllVersions =
     {
         "v0.7.0",
@@ -279,10 +270,13 @@ public static class DocumentationHelper
         "v0.12.1",
         "v0.13.0",
         "v0.13.1",
-        "v0.13.2"
+        "v0.13.2",
+        "v0.13.3",
+        "v0.13.4",
+        "v0.13.5"
     };
 
-    public const string BdnNextVersion = "v0.13.3";
+    public const string BdnNextVersion = "v0.13.6";
     public const string BdnFirstCommit = "6eda98ab1e83a0d185d09ff8b24c795711af8db1";
 }
 
@@ -315,7 +309,7 @@ public class BuildTask : FrostingTask<BuildContext>
 {
     public override void Run(BuildContext context)
     {
-        context.DotNetBuild(context.SolutionFile.FullPath, new DotNetCoreBuildSettings
+        context.DotNetBuild(context.SolutionFile.FullPath, new DotNetBuildSettings
         {
             Configuration = context.BuildConfiguration,
             NoRestore = true,
@@ -338,32 +332,32 @@ public class FastTestsTask : FrostingTask<BuildContext>
     public override void Run(BuildContext context)
     {
         var targetFrameworks = context.IsRunningOnWindows()
-            ? new[] { "net461", "net6.0" }
-            : new[] { "net6.0" };
+            ? new[] { "net462", "net7.0" }
+            : new[] { "net7.0" };
 
         foreach (var targetFramework in targetFrameworks) 
             context.RunTests(context.UnitTestsProjectFile, "UnitTests", targetFramework);
     }
 }
 
-[TaskName("SlowTestsNet461")]
+[TaskName("SlowFullFrameworkTests")]
 [IsDependentOn(typeof(BuildTask))]
-public class SlowTestsNet461Task : FrostingTask<BuildContext>
+public class SlowFullFrameworkTestsTask : FrostingTask<BuildContext>
 {
     public override bool ShouldRun(BuildContext context)
     {
-        return !context.SkipTests && !context.SkipSlowTests && context.IsRunningOnWindows();
+        return !context.SkipTests && !context.SkipSlowTests && context.IsRunningOnWindows() && !context.IsRunningOnAppVeyor;
     }
 
     public override void Run(BuildContext context)
     {
-        context.RunTests(context.IntegrationTestsProjectFile, "IntegrationTests", "net461");
+        context.RunTests(context.IntegrationTestsProjectFile, "IntegrationTests", "net462");
     }
 }
 
-[TaskName("SlowTestsNet5")]
+[TaskName("SlowTestsNetCore")]
 [IsDependentOn(typeof(BuildTask))]
-public class SlowTestsNet5Task : FrostingTask<BuildContext>
+public class SlowTestsNetCoreTask : FrostingTask<BuildContext>
 {
     public override bool ShouldRun(BuildContext context)
     {
@@ -372,14 +366,14 @@ public class SlowTestsNet5Task : FrostingTask<BuildContext>
 
     public override void Run(BuildContext context)
     {
-        context.RunTests(context.IntegrationTestsProjectFile, "IntegrationTests", "net6.0");
+        context.RunTests(context.IntegrationTestsProjectFile, "IntegrationTests", "net7.0");
     }
 }
 
 [TaskName("AllTests")]
 [IsDependentOn(typeof(FastTestsTask))]
-[IsDependentOn(typeof(SlowTestsNet461Task))]
-[IsDependentOn(typeof(SlowTestsNet5Task))]
+[IsDependentOn(typeof(SlowFullFrameworkTestsTask))]
+[IsDependentOn(typeof(SlowTestsNetCoreTask))]
 public class AllTestsTask : FrostingTask<BuildContext>
 {
 }
@@ -390,19 +384,20 @@ public class PackTask : FrostingTask<BuildContext>
 {
     public override bool ShouldRun(BuildContext context)
     {
-        return context.IsOnAppVeyorAndBdnNightlyCiCd;
+        //return context.IsOnAppVeyorAndBdnNightlyCiCd;
+        return true;
     }
 
     public override void Run(BuildContext context)
     {
-        var settingsSrc = new DotNetCorePackSettings
+        var settingsSrc = new DotNetPackSettings
         {
             Configuration = context.BuildConfiguration,
             OutputDirectory = context.ArtifactsDirectory.FullPath,
             ArgumentCustomization = args => args.Append("--include-symbols").Append("-p:SymbolPackageFormat=snupkg"),
             MSBuildSettings = context.MsBuildSettings
         };
-        var settingsTemplate = new DotNetCorePackSettings
+        var settingsTemplate = new DotNetPackSettings
         {
             Configuration = context.BuildConfiguration,
             OutputDirectory = context.ArtifactsDirectory.FullPath,
@@ -422,24 +417,8 @@ public class DefaultTask : FrostingTask
 {
 }
 
-[TaskName("DocFX_Install")]
-public class DocfxInstallTask : FrostingTask<BuildContext>
-{
-    public override void Run(BuildContext context)
-    {
-        if (!context.FileExists(context.DocfxExeFile.FullPath))
-        {
-            var url =
-                $"https://github.com/dotnet/docfx/releases/download/v{DocumentationHelper.DocFxVersion}/docfx.zip";
-            var docfxZip = context.ToolsDirectory.CombineWithFilePath("docfx.zip");
-            context.DownloadFile(url, docfxZip);
-            context.Unzip(docfxZip, context.DocfxDirectory);
-        }
-    }
-}
 
 [TaskName("DocFX_Changelog_Download")]
-[IsDependentOn(typeof(DocfxInstallTask))]
 public class DocFxChangelogDownloadTask : FrostingTask<BuildContext>
 {
     public override void Run(BuildContext context)
@@ -454,24 +433,23 @@ public class DocFxChangelogDownloadTask : FrostingTask<BuildContext>
                 context.DocfxChangelogDownload(
                     DocumentationHelper.BdnAllVersions[i],
                     DocumentationHelper.BdnAllVersions[i - 1]);
-        } else if (context.Argument("LatestVersions", false))
+        }
+        else if (context.Argument("LatestVersions", false))
         {
-            for (int i = DocumentationHelper.BdnAllVersions.Length - 2; i < DocumentationHelper.BdnAllVersions.Length; i++)
+            for (int i = DocumentationHelper.BdnAllVersions.Length - 3; i < DocumentationHelper.BdnAllVersions.Length; i++)
                 context.DocfxChangelogDownload(
                     DocumentationHelper.BdnAllVersions[i],
                     DocumentationHelper.BdnAllVersions[i - 1]);
         }
 
-        if (!context.Argument("StableVersions", false))
-            context.DocfxChangelogDownload(
-                DocumentationHelper.BdnNextVersion,
-                DocumentationHelper.BdnAllVersions.Last(),
-                "HEAD");
+        context.DocfxChangelogDownload(
+            DocumentationHelper.BdnNextVersion,
+            DocumentationHelper.BdnAllVersions.Last(),
+            "HEAD");
     }
 }
 
 [TaskName("DocFX_Changelog_Generate")]
-[IsDependentOn(typeof(DocfxInstallTask))]
 public class DocfxChangelogGenerateTask : FrostingTask<BuildContext>
 {
     public override void Run(BuildContext context)
@@ -501,26 +479,12 @@ public class DocfxGenerateRedirectsTask : FrostingTask<BuildContext>
 // side effects (CleanTask).
 // TODO: Define dependencies when a CI workflow scenario for using the "DocFX_Build" target exists.
 [TaskName("DocFX_Build")]
-[IsDependentOn(typeof(DocfxInstallTask))]
 [IsDependentOn(typeof(DocfxChangelogGenerateTask))]
-public class DocfxChangelogBuildTask : FrostingTask<BuildContext>
+public class DocfxBuildTask : FrostingTask<BuildContext>
 {
     public override void Run(BuildContext context)
     {
         context.RunDocfx(context.DocfxJsonFile);
         context.GenerateRedirects();
-    }
-}
-
-[TaskName("DocFX_Serve")]
-[IsDependentOn(typeof(DocfxInstallTask))]
-[IsDependentOn(typeof(DocfxChangelogGenerateTask))]
-public class DocfxChangelogServeTask : FrostingTask<BuildContext>
-{
-    public override void Run(BuildContext context)
-    {
-        context.RunDocfx(context.DocfxJsonFile);
-        context.GenerateRedirects();
-        context.RunDocfx(context.DocfxJsonFile, "--serve");
     }
 }

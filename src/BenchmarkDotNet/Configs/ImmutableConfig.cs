@@ -14,7 +14,6 @@ using BenchmarkDotNet.Order;
 using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Validators;
-using JetBrains.Annotations;
 using RunMode = BenchmarkDotNet.Diagnosers.RunMode;
 
 namespace BenchmarkDotNet.Configs
@@ -50,6 +49,7 @@ namespace BenchmarkDotNet.Configs
             string artifactsPath,
             CultureInfo cultureInfo,
             IOrderer orderer,
+            ICategoryDiscoverer categoryDiscoverer,
             SummaryStyle summaryStyle,
             ConfigOptions options,
             TimeSpan buildTimeout,
@@ -70,6 +70,7 @@ namespace BenchmarkDotNet.Configs
             ArtifactsPath = artifactsPath;
             CultureInfo = cultureInfo;
             Orderer = orderer;
+            CategoryDiscoverer = categoryDiscoverer;
             SummaryStyle = summaryStyle;
             Options = options;
             BuildTimeout = buildTimeout;
@@ -80,7 +81,8 @@ namespace BenchmarkDotNet.Configs
         public string ArtifactsPath { get; }
         public CultureInfo CultureInfo { get; }
         public ConfigOptions Options { get; }
-        [NotNull] public IOrderer Orderer { get; }
+        public IOrderer Orderer { get; }
+        public ICategoryDiscoverer CategoryDiscoverer { get; }
         public SummaryStyle SummaryStyle { get; }
         public TimeSpan BuildTimeout { get; }
 

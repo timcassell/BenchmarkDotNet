@@ -20,6 +20,19 @@ namespace BenchmarkDotNet.Tests.Configs
     public class ImmutableConfigTests
     {
         [Fact]
+        public void DuplicateJobsAreExcluded()
+        {
+            var mutable = ManualConfig.CreateEmpty();
+
+            mutable.AddJob(new Job());
+            mutable.AddJob(new Job());
+
+            var final = ImmutableConfigBuilder.Create(mutable);
+
+            Assert.Single(final.GetJobs());
+        }
+
+        [Fact]
         public void DuplicateColumnProvidersAreExcluded()
         {
             var mutable = ManualConfig.CreateEmpty();
@@ -55,6 +68,20 @@ namespace BenchmarkDotNet.Tests.Configs
 
             var final = ImmutableConfigBuilder.Create(mutable);
 
+            Assert.Equal(HardwareCounter.CacheMisses, final.GetHardwareCounters().Single());
+        }
+
+        [Fact]
+        public void NoSetHardwareCounterIsExcluded()
+        {
+            var mutable = ManualConfig.CreateEmpty();
+
+            mutable.AddHardwareCounters(HardwareCounter.NotSet);
+            mutable.AddHardwareCounters(HardwareCounter.CacheMisses);
+
+            var final = ImmutableConfigBuilder.Create(mutable);
+
+            Assert.Single(final.GetHardwareCounters());
             Assert.Equal(HardwareCounter.CacheMisses, final.GetHardwareCounters().Single());
         }
 

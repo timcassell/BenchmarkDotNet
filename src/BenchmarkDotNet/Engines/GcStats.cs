@@ -13,9 +13,10 @@ namespace BenchmarkDotNet.Engines
 
         public static readonly long AllocationQuantum = CalculateAllocationQuantumSize();
 
+#if !NET6_0_OR_GREATER
         private static readonly Func<long> GetAllocatedBytesForCurrentThreadDelegate = CreateGetAllocatedBytesForCurrentThreadDelegate();
         private static readonly Func<bool, long> GetTotalAllocatedBytesDelegate = CreateGetTotalAllocatedBytesDelegate();
-
+#endif
         public static readonly GcStats Empty = default;
 
         private GcStats(int gen0Collections, int gen1Collections, int gen2Collections, long? allocatedBytes, long totalOperations, long? survivedBytes)
@@ -148,7 +149,11 @@ namespace BenchmarkDotNet.Engines
 
         private static long? GetAllocatedBytes()
         {
-            if (RuntimeInformation.IsMono) // Monitoring is not available in Mono, see http://stackoverflow.com/questions/40234948/how-to-get-the-number-of-allocated-bytes-
+            if (RuntimeInformation.IsOldMono) // Monitoring is not available in Mono, see http://stackoverflow.com/questions/40234948/how-to-get-the-number-of-allocated-bytes-
+                return null;
+
+            // we have no tests for WASM and don't want to risk introducing a new bug (https://github.com/dotnet/BenchmarkDotNet/issues/2226)
+            if (RuntimeInformation.IsWasm)
                 return null;
 
             // "This instance Int64 property returns the number of bytes that have been allocated by a specific
@@ -159,11 +164,15 @@ namespace BenchmarkDotNet.Engines
             if (RuntimeInformation.IsFullFramework) // it can be a .NET app consuming our .NET Standard package
                 return AppDomain.CurrentDomain.MonitoringTotalAllocatedMemorySize;
 
+#if NET6_0_OR_GREATER
+            return GC.GetTotalAllocatedBytes(precise: true);
+#else
             if (GetTotalAllocatedBytesDelegate != null) // it's .NET Core 3.0 with the new API available
                 return GetTotalAllocatedBytesDelegate.Invoke(true); // true for the "precise" argument
 
             // https://apisof.net/catalog/System.GC.GetAllocatedBytesForCurrentThread() is not part of the .NET Standard, so we use reflection to call it..
             return GetAllocatedBytesForCurrentThreadDelegate.Invoke();
+#endif
         }
 
         private static Func<long> CreateGetAllocatedBytesForCurrentThreadDelegate()
