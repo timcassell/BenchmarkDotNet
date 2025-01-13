@@ -4,7 +4,7 @@ using System.Text;
 namespace BenchmarkDotNet.Samples
 {
     [MemoryDiagnoser(false)]
-    public class IntroStringBuilder
+    public class IntroSmokeStringBuilder
     {
         [Benchmark]
         [Arguments(1)]
