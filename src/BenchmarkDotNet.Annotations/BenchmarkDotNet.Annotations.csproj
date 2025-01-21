@@ -14,4 +14,11 @@
   <ItemGroup>
     <Compile Include="..\BenchmarkDotNet\Helpers\CodeAnnotations.cs" Link="Attributes\CodeAnnotations.cs" />
   </ItemGroup>
+  
+  <!--<ItemGroup>
+    <ProjectReference Include="..\BenchmarkDotNet.Weaver\BenchmarkDotNet.Weaver.csproj" />
+    <None Include="..\BenchmarkDotNet.Weaver\buildTransitive\BenchmarkDotNet.Weaver.targets" Pack="true" PackagePath="buildTransitive\" />
+    <None Include="..\BenchmarkDotNet.Weaver\lib\netstandard2.0\*.dll" Pack="true" PackagePath="lib\netstandard2.0\" />
+  </ItemGroup>-->
+  
 </Project>
