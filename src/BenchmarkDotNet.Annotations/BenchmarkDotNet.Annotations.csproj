@@ -14,11 +14,20 @@
   <ItemGroup>
     <Compile Include="..\BenchmarkDotNet\Helpers\CodeAnnotations.cs" Link="Attributes\CodeAnnotations.cs" />
   </ItemGroup>
-  
-  <!--<ItemGroup>
-    <ProjectReference Include="..\BenchmarkDotNet.Weaver\BenchmarkDotNet.Weaver.csproj" />
-    <None Include="..\BenchmarkDotNet.Weaver\buildTransitive\BenchmarkDotNet.Weaver.targets" Pack="true" PackagePath="buildTransitive\" />
-    <None Include="..\BenchmarkDotNet.Weaver\lib\netstandard2.0\*.dll" Pack="true" PackagePath="lib\netstandard2.0\" />
-  </ItemGroup>-->
-  
+
+  <!-- Refresh weaver package before restore. -->
+  <Target Name="RefreshWeaver" BeforeTargets="Restore">
+	<Exec Command="powershell -NoProfile -ExecutionPolicy Unrestricted -File &quot;$(MSBuildThisFileDirectory)..\..\build\refresh-weaver.ps1&quot;" />
+  </Target>
+
+  <!-- PackageReference for transitive weaver dependency (including for ProjectReference). -->
+  <PropertyGroup>
+	<RestoreSources>$(MSBuildThisFileDirectory)..\BenchmarkDotNet.Weaver\package</RestoreSources>
+  </PropertyGroup>
+  <ItemGroup>
+	<PackageReference Include="BenchmarkDotNet.Weaver" Version="$(Version)" />
+  </ItemGroup>
+
+  <!-- Ensure Restore target runs in case only dotnet build is called. -->
+  <Target Name="EnsureNugetRestoreBeforeResolveRefs" DependsOnTargets="Restore" BeforeTargets="BeforeResolveReferences"/>
 </Project>

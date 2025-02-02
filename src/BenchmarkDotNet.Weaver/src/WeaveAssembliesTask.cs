@@ -18,9 +18,9 @@ internal class CustomAssemblyResolver : DefaultAssemblyResolver
 }
 
 /// <summary>
-/// The Task used by MSBuild to weave the assembly.
+/// The Task used by MSBuild to weave the assemblies.
 /// </summary>
-public sealed class WeaveAssemblyTask : Task
+public sealed class WeaveAssembliesTask : Task
 {
     /// <summary>
     /// The directory of the output.
@@ -29,7 +29,7 @@ public sealed class WeaveAssemblyTask : Task
     public string TargetDir { get; set; }
 
     /// <summary>
-    /// The path of the target assembly.
+    /// The path of the target assemblies.
     /// </summary>
     [Required]
     public string TargetAssembly { get; set; }
@@ -37,7 +37,7 @@ public sealed class WeaveAssemblyTask : Task
     private readonly List<string> _warningMessages = [$"Benchmark methods were found in 1 or more assemblies that require NoInlining, and assembly weaving failed."];
 
     /// <summary>
-    /// Runs the weave assembly task.
+    /// Runs the weave assemblies task.
     /// </summary>
     /// <returns><see langword="true"/> if successful; <see langword="false"/> otherwise.</returns>
     public override bool Execute()

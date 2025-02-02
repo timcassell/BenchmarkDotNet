@@ -90,11 +90,4 @@
       </Code>
     </Task>
   </UsingTask>
-
-  <!--<ItemGroup>
-    --><!-- The project references ensures the weaver task is built for developers. Nothing is actually used from the reference. --><!--
-    <ProjectReference Include="$(MSBuildThisFileDirectory)..\src\BenchmarkDotNet.Weaver\BenchmarkDotNet.Weaver.csproj" />
-  </ItemGroup>-->
-  <!--<Import Project="$(MSBuildThisFileDirectory)..\src\BenchmarkDotNet.Weaver\buildTransitive\BenchmarkDotNet.Weaver.targets" />-->
-  
 </Project>
