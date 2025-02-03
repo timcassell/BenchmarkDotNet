@@ -1,5 +1,5 @@
 param (
-    [string]$PackageVersion = "0.14.1-develop"
+    [string]$PackageVersion
 )
 
 $packageId = "BenchmarkDotNet.Weaver"
@@ -8,10 +8,10 @@ $dir = Split-Path $scriptpath
 $weaverDir = [System.IO.Path]::Combine($dir, "..\src\$packageId")
 $weaverProj = [System.IO.Path]::Combine($weaverDir, "$packageId.csproj")
 
-dotnet clean $weaverProj
-dotnet build $weaverProj -c Release
-$packageDir = [System.IO.Path]::Combine($weaverDir, "package")
-dotnet pack $weaverProj -c Release --output $packageDir
+dotnet clean $weaverProj --nodeReuse:false
+dotnet build $weaverProj -c Release --nodeReuse:false
+$packageDir = [System.IO.Path]::Combine($weaverDir, "packages")
+dotnet pack $weaverProj -c Release --nodeReuse:false --output $packageDir
 
 # Clear nuget cache of existing package if it exists.
 $nugetCachePaths = dotnet nuget locals all --list | ForEach-Object {
@@ -20,7 +20,6 @@ $nugetCachePaths = dotnet nuget locals all --list | ForEach-Object {
 
 foreach ($cachePath in $nugetCachePaths) {
     $cachePath = $cachePath.Trim()
-    Write-Output "Checking cache path: $cachePath"
 
     # Construct the package path
     $packagePath = [System.IO.Path]::Combine($cachePath, $packageId, $PackageVersion)

@@ -16,18 +16,19 @@
   </ItemGroup>
 
   <!-- Refresh weaver package before restore. -->
-  <Target Name="RefreshWeaver" BeforeTargets="Restore">
+  <Target Name="RefreshWeaver" BeforeTargets="Restore" Condition="'$(WeaverRefreshed)' != 'true'">
 	<Exec Command="powershell -NoProfile -ExecutionPolicy Unrestricted -File &quot;$(MSBuildThisFileDirectory)..\..\build\refresh-weaver.ps1&quot;" />
+	<!-- Ensure the script only runs once. -->
+	<PropertyGroup>
+	  <WeaverRefreshed>true</WeaverRefreshed>
+	</PropertyGroup>
   </Target>
 
   <!-- PackageReference for transitive weaver dependency (including for ProjectReference). -->
   <PropertyGroup>
-	<RestoreSources>$(MSBuildThisFileDirectory)..\BenchmarkDotNet.Weaver\package</RestoreSources>
+	<RestoreSources>$(MSBuildThisFileDirectory)..\BenchmarkDotNet.Weaver\packages</RestoreSources>
   </PropertyGroup>
   <ItemGroup>
 	<PackageReference Include="BenchmarkDotNet.Weaver" Version="$(Version)" />
   </ItemGroup>
-
-  <!-- Ensure Restore target runs in case only dotnet build is called. -->
-  <Target Name="EnsureNugetRestoreBeforeResolveRefs" DependsOnTargets="Restore" BeforeTargets="BeforeResolveReferences"/>
 </Project>
