@@ -19,7 +19,7 @@
   <ItemGroup>
 	<!-- Include .targets file and all DLLs in the output directory in the NuGet package -->
 	<Content Include="$(MSBuildThisFileDirectory)buildTransitive\**\*.targets" Pack="true" PackagePath="buildTransitive" />
-	<Content Include="$(OutputPath)**\*.dll" Exclude="$(OutputPath)**\$(AssemblyName).dll" Pack="true" PackagePath="lib\$(TargetFramework)" />
+	<Content Include="$(OutputPath)**\*.dll" Exclude="$(OutputPath)**\$(AssemblyName).dll" Pack="true" PackagePath="lib/$(TargetFramework)" />
 	<None Remove="packages\**" />
   </ItemGroup>
 </Project>
