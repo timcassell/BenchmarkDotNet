@@ -15,20 +15,18 @@
     <Compile Include="..\BenchmarkDotNet\Helpers\CodeAnnotations.cs" Link="Attributes\CodeAnnotations.cs" />
   </ItemGroup>
 
-  <!-- Refresh weaver package before restore. -->
-  <Target Name="RefreshWeaver" BeforeTargets="Restore" Condition="'$(WeaverRefreshed)' != 'true'">
-	<Exec Command="powershell -NoProfile -ExecutionPolicy Unrestricted -File &quot;$(MSBuildThisFileDirectory)..\..\build\refresh-weaver.ps1&quot;" />
-	<!-- Ensure the script only runs once. -->
-	<PropertyGroup>
-	  <WeaverRefreshed>true</WeaverRefreshed>
-	</PropertyGroup>
-  </Target>
-
-  <!-- PackageReference for transitive weaver dependency (including for ProjectReference). -->
-  <PropertyGroup>
-	<RestoreSources>$(MSBuildThisFileDirectory)..\BenchmarkDotNet.Weaver\packages</RestoreSources>
-  </PropertyGroup>
-  <ItemGroup>
-	<PackageReference Include="BenchmarkDotNet.Weaver" Version="$(Version)" />
-  </ItemGroup>
+  <Choose>
+	<When Condition="'$(IsFullPack)' == 'true'">
+	  <!-- ProjectReference to ensure the nuget package has a dependency on BenchmarkDotNet.Weaver using the proper version. -->
+	  <ItemGroup>
+		<ProjectReference Include="..\BenchmarkDotNet.Weaver\BenchmarkDotNet.Weaver.csproj" />
+	  </ItemGroup>
+	</When>
+	<Otherwise>
+	  <!-- PackageReference for transitive weaver dependency for ProjectReferences to this. -->
+	  <ItemGroup>
+		<PackageReference Include="BenchmarkDotNet.Weaver" Version="$(Version)$(WeaverVersionSuffix)" />
+	  </ItemGroup>
+	</Otherwise>
+  </Choose>
 </Project>

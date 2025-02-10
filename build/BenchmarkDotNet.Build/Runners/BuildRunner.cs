@@ -71,7 +71,7 @@ public class BuildRunner
         var settingsSrc = new DotNetPackSettings
         {
             OutputDirectory = context.ArtifactsDirectory,
-            ArgumentCustomization = args => args.Append("--include-symbols").Append("-p:SymbolPackageFormat=snupkg"),
+            ArgumentCustomization = args => args.Append("--include-symbols").Append("-p:SymbolPackageFormat=snupkg").Append("-p:IsFullPack=true"),
             MSBuildSettings = context.MsBuildSettingsPack,
             Configuration = context.BuildConfiguration
         };

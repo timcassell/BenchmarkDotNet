@@ -1,8 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<!-- When any changes are made to this project, increment the WeaverVersionSuffix in the common.props file,
+     then re-pack with output to \packages, and delete the old nupkg. -->
+
+<Project Sdk="Microsoft.NET.Sdk">
   <Import Project="..\..\build\common.props" />
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+	<VersionSuffix Condition="'$(IsFullPack)' != 'true'">$(VersionSuffix)$(WeaverVersionSuffix)</VersionSuffix>
   </PropertyGroup>
 
   <ItemGroup>
