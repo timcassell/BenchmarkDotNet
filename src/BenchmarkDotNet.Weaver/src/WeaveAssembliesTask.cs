@@ -12,7 +12,7 @@ internal class CustomAssemblyResolver : DefaultAssemblyResolver
 {
     public override AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
         // Fix StackOverflow https://github.com/jbevain/cecil/issues/573
-        => name.FullName.StartsWith("netstandard")
+        => name.FullName.StartsWith("netstandard") || name.FullName.StartsWith("mscorlib") || name.FullName.StartsWith("System.Private.CoreLib")
             ? AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location), Path.ChangeExtension(name.Name, ".dll")), parameters)
             : base.Resolve(name, parameters);
 }
