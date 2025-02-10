@@ -1,5 +1,5 @@
     // the type name must be in sync with WindowsDisassembler.BuildArguments
-    public sealed class Runnable_$ID$ : global::$WorkloadTypeName$
+    public unsafe sealed class Runnable_$ID$ : global::$WorkloadTypeName$
     {
         public static void Run(BenchmarkDotNet.Engines.IHost host, System.String benchmarkName)
         {
