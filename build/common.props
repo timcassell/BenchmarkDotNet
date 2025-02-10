@@ -92,7 +92,6 @@
   </UsingTask>
 
   <PropertyGroup>
-	<RestoreSources>$(RestoreSources);$(MSBuildThisFileDirectory)..\src\BenchmarkDotNet.Weaver\packages</RestoreSources>
 	<!-- Increment this when the BenchmarkDotNet.Weaver package needs to be re-packed. -->
 	<WeaverVersionSuffix>-1</WeaverVersionSuffix>
   </PropertyGroup>
