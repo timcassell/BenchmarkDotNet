@@ -220,7 +220,7 @@ namespace BenchmarkDotNet.Toolchains.DotNetCli
             const string NoMsBuildZombieProcesses = "/p:UseSharedCompilation=false /p:BuildInParallel=false /m:1 /p:Deterministic=true";
             // .Net Framework causes "warning MSB3026: Could not copy ... The file is locked by: .NET Host" when the weaver task is ran
             // on the user's project when the wrapper project is built. So we disable it globally, and enable it only for the wrapper project.
-            const string SkipWeaver = "/p:SkipWeaver=true";
+            const string SkipWeaver = "/p:BenchmarkDotNetSkipWeaver=true";
             const string EnforceOptimizations = "/p:Optimize=true";
 
             if (string.Equals(buildConfiguration, RuntimeInformation.DebugConfigurationName, StringComparison.OrdinalIgnoreCase))
