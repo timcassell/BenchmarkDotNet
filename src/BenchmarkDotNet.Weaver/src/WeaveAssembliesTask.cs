@@ -12,8 +12,8 @@ internal class CustomAssemblyResolver : DefaultAssemblyResolver
 {
     public override AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
         // Fix StackOverflow https://github.com/jbevain/cecil/issues/573
-        => name.FullName.StartsWith("netstandard") || name.FullName.StartsWith("mscorlib") || name.FullName.StartsWith("System.Private.CoreLib")
-            ? AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location), Path.ChangeExtension(name.Name, ".dll")), parameters)
+        => name.Name is "netstandard"
+            ? AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location), Path.ChangeExtension(name.Name, ".dll")))
             : base.Resolve(name, parameters);
 }
 
@@ -34,7 +34,7 @@ public sealed class WeaveAssembliesTask : Task
     [Required]
     public string TargetAssembly { get; set; }
 
-    private readonly List<string> _warningMessages = [$"Benchmark methods were found in 1 or more assemblies that require NoInlining, and assembly weaving failed."];
+    private List<string> _warningMessages;
 
     /// <summary>
     /// Runs the weave assemblies task.
@@ -70,9 +70,7 @@ public sealed class WeaveAssembliesTask : Task
             ProcessAssembly(assemblyPath, readerParameters, out _);
         }
 
-        // Assembly resolution can fail for library projects that contain references if the project does not have <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>.
-        // Because the library project could be built as a dependency of the executable, we only log the warning if the target assembly is executable.
-        if (_warningMessages.Count > 1 && isExecutable)
+        if (_warningMessages != null)
         {
             Log.LogWarning(string.Join(Environment.NewLine, _warningMessages));
         }
@@ -100,6 +98,7 @@ public sealed class WeaveAssembliesTask : Task
         {
             if (benchmarkMethodsImplAdjusted)
             {
+                _warningMessages ??= ["Benchmark methods were found in 1 or more assemblies that require NoInlining, and assembly weaving failed."];
                 _warningMessages.Add($"Assembly: {assemblyPath}, error: {e.Message}");
             }
         }
@@ -116,7 +115,7 @@ public sealed class WeaveAssembliesTask : Task
         // Remove AggressiveInlining and add NoInlining to all [Benchmark] methods.
         foreach (var method in type.Methods)
         {
-            if (method.CustomAttributes.Any(attr => attr.AttributeType.FullName == "BenchmarkDotNet.Attributes.BenchmarkAttribute"))
+            if (method.CustomAttributes.Any(IsBenchmarkAttribute))
             {
                 var oldImpl = method.ImplAttributes;
                 method.ImplAttributes = (oldImpl & ~MethodImplAttributes.AggressiveInlining) | MethodImplAttributes.NoInlining;
@@ -129,5 +128,29 @@ public sealed class WeaveAssembliesTask : Task
         {
             ProcessType(nestedType, ref benchmarkMethodsImplAdjusted);
         }
+    }
+
+    private bool IsBenchmarkAttribute(CustomAttribute attribute)
+    {
+        // BenchmarkAttribute is unsealed, so we need to walk its hierarchy.
+        var attr = attribute.AttributeType;
+        while (attr != null)
+        {
+            if (attr.FullName == "BenchmarkDotNet.Attributes.BenchmarkAttribute")
+            {
+                return true;
+            }
+            // Resolving mscorlib may fail in Visual Studio.
+            // We don't care about any types from mscorlib anyway, so just return false in that case.
+            try
+            {
+                attr = attr.Resolve()?.BaseType;
+            }
+            catch (AssemblyResolutionException)
+            {
+                return false;
+            }
+        }
+        return false;
     }
 }
