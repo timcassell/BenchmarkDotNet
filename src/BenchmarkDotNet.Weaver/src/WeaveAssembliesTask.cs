@@ -11,9 +11,11 @@ namespace BenchmarkDotNet.Weaver;
 internal class CustomAssemblyResolver : DefaultAssemblyResolver
 {
     public override AssemblyDefinition Resolve(AssemblyNameReference name, ReaderParameters parameters)
-        // Fix StackOverflow https://github.com/jbevain/cecil/issues/573
-        => name.Name is "netstandard"
-            ? AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location), Path.ChangeExtension(name.Name, ".dll")))
+        // NetStandard causes StackOverflow. https://github.com/jbevain/cecil/issues/573
+        // Mscorlib fails to resolve in Visual Studio. https://github.com/jbevain/cecil/issues/966
+        // We don't care about any types from these assemblies anyway, so just skip resolving them.
+        => name.Name is "netstandard" or "mscorlib" or "System.Runtime" or "System.Private.CoreLib"
+            ? null// AssemblyDefinition.ReadAssembly(Path.Combine(Path.GetDirectoryName(typeof(object).Assembly.Location), Path.ChangeExtension(name.Name, ".dll")))
             : base.Resolve(name, parameters);
 }
 
@@ -133,22 +135,11 @@ public sealed class WeaveAssembliesTask : Task
     private bool IsBenchmarkAttribute(CustomAttribute attribute)
     {
         // BenchmarkAttribute is unsealed, so we need to walk its hierarchy.
-        var attr = attribute.AttributeType;
-        while (attr != null)
+        for (var attr = attribute.AttributeType; attr != null; attr = attr.Resolve()?.BaseType)
         {
             if (attr.FullName == "BenchmarkDotNet.Attributes.BenchmarkAttribute")
             {
                 return true;
-            }
-            // Resolving mscorlib may fail in Visual Studio.
-            // We don't care about any types from mscorlib anyway, so just return false in that case.
-            try
-            {
-                attr = attr.Resolve()?.BaseType;
-            }
-            catch (AssemblyResolutionException)
-            {
-                return false;
             }
         }
         return false;
