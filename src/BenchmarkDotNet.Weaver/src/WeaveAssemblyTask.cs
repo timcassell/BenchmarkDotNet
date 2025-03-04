@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Build.Framework;
@@ -22,7 +21,7 @@ internal class CustomAssemblyResolver : DefaultAssemblyResolver
 /// <summary>
 /// The Task used by MSBuild to weave the assemblies.
 /// </summary>
-public sealed class WeaveAssembliesTask : Task
+public sealed class WeaveAssemblyTask : Task
 {
     /// <summary>
     /// The directory of the output.
@@ -31,12 +30,10 @@ public sealed class WeaveAssembliesTask : Task
     public string TargetDir { get; set; }
 
     /// <summary>
-    /// The path of the target assemblies.
+    /// The path of the target assembly.
     /// </summary>
     [Required]
     public string TargetAssembly { get; set; }
-
-    private List<string> _warningMessages;
 
     /// <summary>
     /// Runs the weave assemblies task.
@@ -61,32 +58,10 @@ public sealed class WeaveAssembliesTask : Task
             AssemblyResolver = resolver
         };
 
-        ProcessAssembly(TargetAssembly, readerParameters, out bool isExecutable);
-
-        foreach (var assemblyPath in Directory.GetFiles(TargetDir, "*.dll"))
-        {
-            if (assemblyPath == TargetAssembly)
-            {
-                continue;
-            }
-            ProcessAssembly(assemblyPath, readerParameters, out _);
-        }
-
-        if (_warningMessages != null)
-        {
-            Log.LogWarning(string.Join(Environment.NewLine, _warningMessages));
-        }
-        return true;
-    }
-
-    private void ProcessAssembly(string assemblyPath, ReaderParameters readerParameters, out bool isExecutable)
-    {
-        isExecutable = false;
         bool benchmarkMethodsImplAdjusted = false;
         try
         {
-            using var module = ModuleDefinition.ReadModule(assemblyPath, readerParameters);
-            isExecutable = module.EntryPoint != null;
+            using var module = ModuleDefinition.ReadModule(TargetAssembly, readerParameters);
 
             foreach (var type in module.Types)
             {
@@ -100,10 +75,10 @@ public sealed class WeaveAssembliesTask : Task
         {
             if (benchmarkMethodsImplAdjusted)
             {
-                _warningMessages ??= ["Benchmark methods were found in 1 or more assemblies that require NoInlining, and assembly weaving failed."];
-                _warningMessages.Add($"Assembly: {assemblyPath}, error: {e.Message}");
+                Log.LogWarning($"Benchmark methods were found that require NoInlining, and assembly weaving failed.{Environment.NewLine}{e}");
             }
         }
+        return true;
     }
 
     private void ProcessType(TypeDefinition type, ref bool benchmarkMethodsImplAdjusted)
