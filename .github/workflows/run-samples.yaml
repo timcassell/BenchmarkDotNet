@@ -1,0 +1,21 @@
+name: run-samples
+run-name: Run Samples / ${{ github.event.head_commit.message }}
+
+on:
+  pull_request:
+  push:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+
+  test-sample:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+  
+      - name: Run Samples
+        run: dotnet run --project ./samples/BenchmarkDotNet.Samples/BenchmarkDotNet.Samples.csproj -c Release -f net8.0 --filter *IntroSmokeIncrements*
+          
