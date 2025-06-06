@@ -44,42 +44,29 @@ public sealed class WeaveAssemblyTask : Task
 
 
         bool benchmarkMethodsImplAdjusted = false;
-        try
+        var module = ModuleDefinition.FromFile(TargetAssembly);
+
+        foreach (var type in module.GetAllTypes())
         {
-            var module = ModuleDefinition.FromFile(TargetAssembly);
-
-            foreach (var type in module.GetAllTypes())
+            // We can skip non-public types as they are not valid for benchmarks.
+            if (type.IsNotPublic)
             {
-                // We can skip non-public types as they are not valid for benchmarks.
-                if (type.IsNotPublic)
-                {
-                    continue;
-                }
+                continue;
+            }
 
-                foreach (var method in type.Methods)
+            foreach (var method in type.Methods)
+            {
+                if (method.CustomAttributes.Any(IsBenchmarkAttribute))
                 {
-                    if (method.CustomAttributes.Any(IsBenchmarkAttribute))
-                    {
-                        var oldImpl = method.ImplAttributes;
-                        // Remove AggressiveInlining and add NoInlining.
-                        method.ImplAttributes = (oldImpl & ~MethodImplAttributes.AggressiveInlining) | MethodImplAttributes.NoInlining;
-                        benchmarkMethodsImplAdjusted |= (oldImpl & MethodImplAttributes.NoInlining) == 0;
-                    }
+                    var oldImpl = method.ImplAttributes;
+                    // Remove AggressiveInlining and add NoInlining.
+                    method.ImplAttributes = (oldImpl & ~MethodImplAttributes.AggressiveInlining) | MethodImplAttributes.NoInlining;
+                    benchmarkMethodsImplAdjusted |= (oldImpl & MethodImplAttributes.NoInlining) == 0;
                 }
             }
+        }
 
-            if (benchmarkMethodsImplAdjusted)
-            {
-                module.Write(TargetAssembly);
-            }
-        }
-        catch (Exception e)
-        {
-            if (benchmarkMethodsImplAdjusted)
-            {
-                Log.LogWarning($"Benchmark methods were found that require NoInlining, and assembly weaving failed.{Environment.NewLine}{e}");
-            }
-        }
+        module.Write(TargetAssembly);
         return true;
     }
 
