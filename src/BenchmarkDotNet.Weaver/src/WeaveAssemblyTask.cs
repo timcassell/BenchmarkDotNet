@@ -42,12 +42,12 @@ public sealed class WeaveAssemblyTask : Task
             return false;
         }
 
-        // Load the assembly using AsmResolver.
-        var module = ModuleDefinition.FromFile(TargetAssembly);
 
         bool benchmarkMethodsImplAdjusted = false;
         try
         {
+            var module = ModuleDefinition.FromFile(TargetAssembly);
+
             foreach (var type in module.GetAllTypes())
             {
                 // We can skip non-public types as they are not valid for benchmarks.
@@ -68,8 +68,10 @@ public sealed class WeaveAssemblyTask : Task
                 }
             }
 
-            // Write the modified assembly to file.
-            module.Write(TargetAssembly);
+            if (benchmarkMethodsImplAdjusted)
+            {
+                module.Write(TargetAssembly);
+            }
         }
         catch (Exception e)
         {
