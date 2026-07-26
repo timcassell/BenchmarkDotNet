@@ -24,8 +24,33 @@ namespace BenchmarkDotNet.IntegrationTests
 
         public static IEnumerable<object[]> GetAllJits()
         {
-            // DIAG: restricted to InProcessEmit only to investigate the Windows x64 net10 failure.
-            yield return [JitInfo.GetCurrentJit(), RuntimeInformation.GetCurrentPlatform(), InProcessEmitToolchain.Default];
+            yield return [JitInfo.GetCurrentJit(), RuntimeInformation.GetCurrentPlatform(), InProcessEmitToolchain.Default]; // InProcess
+
+            if (ContinuousIntegration.IsGitHubDraftPR())
+                yield break;
+
+            if (RuntimeInformation.IsFullFramework)
+            {
+                yield return [Jit.LegacyJit, Platform.X86, CsProjClassicNetToolchain.Net472]; // 32bit LegacyJit for desktop .NET
+                yield return [Jit.LegacyJit, Platform.X64, CsProjClassicNetToolchain.Net472]; // 64bit LegacyJit for desktop .NET
+                yield return [Jit.RyuJit, Platform.X64, CsProjClassicNetToolchain.Net472]; // RyuJit for desktop .NET
+            }
+            else if (RuntimeInformation.IsNetCore)
+            {
+                // Skip test on `macos(x64)` because test randomly failed on CI.
+                // See: https://github.com/dotnet/BenchmarkDotNet/issues/3086
+                if (RuntimeInformation.GetCurrentPlatform() is Platform.X86 or Platform.X64 && !OsDetector.IsMacOS())
+                {
+                    yield return [Jit.RyuJit, Platform.X64, CsProjCoreToolchain.NetCoreApp10_0]; // .NET Core x64
+                    // We could add Platform.X86 here, but it would make our CI more complicated.
+                }
+                else if (RuntimeInformation.GetCurrentPlatform() is Platform.Arm64)
+                {
+                    yield return [Jit.RyuJit, Platform.Arm64, CsProjCoreToolchain.NetCoreApp10_0]; // .NET Core arm64
+                }
+            }
+
+            // we could add new object[] { Jit.Llvm, Platform.X64, new MonoRuntime() } here but our CI would need to have Mono installed..
         }
 
         public class WithCalls
