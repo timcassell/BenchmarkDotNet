@@ -24,33 +24,8 @@ namespace BenchmarkDotNet.IntegrationTests
 
         public static IEnumerable<object[]> GetAllJits()
         {
-            yield return [JitInfo.GetCurrentJit(), RuntimeInformation.GetCurrentPlatform(), InProcessEmitToolchain.Default]; // InProcess
-
-            if (ContinuousIntegration.IsGitHubDraftPR())
-                yield break;
-
-            if (RuntimeInformation.IsFullFramework)
-            {
-                yield return [Jit.LegacyJit, Platform.X86, CsProjClassicNetToolchain.Net472]; // 32bit LegacyJit for desktop .NET
-                yield return [Jit.LegacyJit, Platform.X64, CsProjClassicNetToolchain.Net472]; // 64bit LegacyJit for desktop .NET
-                yield return [Jit.RyuJit, Platform.X64, CsProjClassicNetToolchain.Net472]; // RyuJit for desktop .NET
-            }
-            else if (RuntimeInformation.IsNetCore)
-            {
-                // Skip test on `macos(x64)` because test randomly failed on CI.
-                // See: https://github.com/dotnet/BenchmarkDotNet/issues/3086
-                if (RuntimeInformation.GetCurrentPlatform() is Platform.X86 or Platform.X64 && !OsDetector.IsMacOS())
-                {
-                    yield return [Jit.RyuJit, Platform.X64, CsProjCoreToolchain.NetCoreApp10_0]; // .NET Core x64
-                    // We could add Platform.X86 here, but it would make our CI more complicated.
-                }
-                else if (RuntimeInformation.GetCurrentPlatform() is Platform.Arm64)
-                {
-                    yield return [Jit.RyuJit, Platform.Arm64, CsProjCoreToolchain.NetCoreApp10_0]; // .NET Core arm64
-                }
-            }
-
-            // we could add new object[] { Jit.Llvm, Platform.X64, new MonoRuntime() } here but our CI would need to have Mono installed..
+            // DIAG: restricted to InProcessEmit only to investigate the Windows x64 net10 failure.
+            yield return [JitInfo.GetCurrentJit(), RuntimeInformation.GetCurrentPlatform(), InProcessEmitToolchain.Default];
         }
 
         public class WithCalls
@@ -162,6 +137,26 @@ namespace BenchmarkDotNet.IntegrationTests
                 new DisassemblyDiagnoserConfig(printSource: true, maxDepth: 3));
 
             CanExecute<WithInlineable>(CreateConfig(jit, platform, toolchain, disassemblyDiagnoser, RunStrategy.Monitoring));
+
+            // DIAG: dump full diagnoser state so we can see why the .Single() predicate misses on CI (Windows x64 InProcess).
+            Output.WriteLine($"[DIAG] Results.Count = {disassemblyDiagnoser.Results.Count}");
+            foreach (var kvp in disassemblyDiagnoser.Results)
+            {
+                Output.WriteLine($"[DIAG] Benchmark: {kvp.Key.DisplayInfo}");
+                Output.WriteLine($"[DIAG]   Errors ({kvp.Value.Errors.Length}): {string.Join(" | ", kvp.Value.Errors)}");
+                Output.WriteLine($"[DIAG]   Methods.Count = {kvp.Value.Methods.Length}");
+                for (int i = 0; i < kvp.Value.Methods.Length; i++)
+                {
+                    var m = kvp.Value.Methods[i];
+                    Output.WriteLine($"[DIAG]     [{i}] Name='{m.Name}' NativeCode=0x{m.NativeCode:X} Problem='{m.Problem}' Maps={m.Maps.Length}");
+                    for (int mi = 0; mi < m.Maps.Length; mi++)
+                    {
+                        var map = m.Maps[mi];
+                        var asmLines = map.SourceCodes.OfType<Asm>().Select(a => a.ToString()).ToArray();
+                        Output.WriteLine($"[DIAG]       Map[{mi}] Asm({asmLines.Length}): {string.Join(" ; ", asmLines)}");
+                    }
+                }
+            }
 
             var disassemblyResult = disassemblyDiagnoser.Results.Values.Single(result => result.Methods.Count(method => method.Name.Contains(nameof(WithInlineable.JustReturn))) == 1);
 

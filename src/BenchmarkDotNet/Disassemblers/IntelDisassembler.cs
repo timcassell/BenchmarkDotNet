@@ -22,13 +22,37 @@ namespace BenchmarkDotNet.Disassemblers
                 ulong address = 0;
                 if (TryGetReferencedAddress(instruction, (uint)state.Runtime.DataTarget.DataReader.PointerSize, out address))
                 {
+                    // [DISASM-DIAG]
+                    bool isBranch = instruction.FlowControl == FlowControl.Call
+                        || instruction.FlowControl == FlowControl.IndirectCall
+                        || instruction.FlowControl == FlowControl.UnconditionalBranch
+                        || instruction.FlowControl == FlowControl.IndirectBranch;
+                    ulong origAddr = address;
+                    if (isBranch)
+                    {
+                        System.Console.WriteLine($"[DISASM-DIAG] {instruction} @0x{instruction.IP:X} referenced=0x{address:X} isIndirect={isIndirect} runtimeMajor={state.RuntimeVersion.Major} flow={instruction.FlowControl}");
+                    }
                     if (isIndirect)
                     {
                         address = state.Runtime.DataTarget.DataReader.ReadPointer(address);
+                        if (isBranch)
+                        {
+                            byte[] peekBuf = new byte[24];
+                            int nRead = state.Runtime.DataTarget.DataReader.Read(address, peekBuf);
+                            System.Console.WriteLine($"[DISASM-DIAG]   after 1-level deref: 0x{origAddr:X} -> 0x{address:X}");
+                            System.Console.WriteLine($"[DISASM-DIAG]   peek@0x{address:X} readN={nRead} bytes={System.BitConverter.ToString(peekBuf, 0, System.Math.Max(0, nRead))}");
+                            var m0 = state.Runtime.GetMethodByInstructionPointer(address);
+                            System.Console.WriteLine($"[DISASM-DIAG]   GetMethodByInstructionPointer(0x{address:X}) = {(m0 is null ? "null" : m0.Signature)}");
+                            var mh = state.Runtime.GetMethodByHandle(address);
+                            System.Console.WriteLine($"[DISASM-DIAG]   GetMethodByHandle(0x{address:X}) = {(mh is null ? "null" : mh.Signature)}");
+                        }
                         if (state.RuntimeVersion.Major >= 7)
                         {
                             FlushCachedDataIfNeeded(state.Runtime.DataTarget.DataReader, address, new byte[1]);
-                            TryResolvePrecode(state.Runtime.DataTarget.DataReader, ref address, out isPrestubMD);
+                            ulong before = address;
+                            bool precodeMatched = TryResolvePrecode(state.Runtime.DataTarget.DataReader, ref address, out isPrestubMD);
+                            if (isBranch)
+                                System.Console.WriteLine($"[DISASM-DIAG]   TryResolvePrecode matched={precodeMatched} address 0x{before:X} -> 0x{address:X} isPrestubMD={isPrestubMD}");
                         }
                     }
                     TryTranslateAddressToName(address, isPrestubMD, state, depth, currentMethod);
