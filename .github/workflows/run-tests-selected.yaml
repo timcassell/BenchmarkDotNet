@@ -66,6 +66,16 @@ jobs:
       - uses: ./.github/actions/add-windowsdefender-exclusions
         if: runner.os == 'Windows'
 
+      # DIAG: pin runtime 10.0.10 to try to reproduce the Windows x64 InProcess failure
+      - name: Install .NET 10.0.10 runtime (diag)
+        shell: pwsh
+        run: |
+          $installDir = "$env:ProgramFiles\dotnet"
+          $installScript = "$env:RUNNER_TEMP\dotnet-install.ps1"
+          Invoke-WebRequest -Uri 'https://dot.net/v1/dotnet-install.ps1' -OutFile $installScript
+          & $installScript -Runtime dotnet -Version 10.0.10 -InstallDir $installDir
+          & "$installDir\dotnet.exe" --list-runtimes
+
       # Setup
       - name: Create `artifacts` directory
         run: |
