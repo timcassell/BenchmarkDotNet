@@ -24,8 +24,8 @@ namespace BenchmarkDotNet.IntegrationTests
 
         public static IEnumerable<object[]> GetAllJits()
         {
-            // DIAG: restricted to InProcessEmit only to isolate the inlining-repro under investigation.
-            yield return [JitInfo.GetCurrentJit(), RuntimeInformation.GetCurrentPlatform(), InProcessEmitToolchain.Default];
+            // DIAG: restricted to CsProjCoreToolchain (the failing config per PR author), current-arch.
+            yield return [Jit.RyuJit, RuntimeInformation.GetCurrentPlatform(), CsProjCoreToolchain.NetCoreApp10_0];
         }
 
         public class WithCalls
