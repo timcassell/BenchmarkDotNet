@@ -59,9 +59,21 @@ jobs:
     runs-on: ${{ inputs.runs_on }}
     timeout-minutes: 60 # Explicitly set timeout. When wrong input parameter is passed. It may continue to run until it times out (Default:360 minutes))
     steps:
+      # DIAG: identify runner CPU and fail fast if it's not AMD EPYC 9V74 (the class where the flake was seen)
+      - name: Check runner CPU (diag)
+        shell: pwsh
+        run: |
+          $cpu = (Get-CimInstance -ClassName Win32_Processor).Name
+          Write-Host "Runner CPU: $cpu"
+          if ($cpu -notmatch 'EPYC 9V74') {
+            Write-Host "Not the target CPU (AMD EPYC 9V74). Skipping rest of workflow."
+            exit 1
+          }
+          Write-Host "Target CPU matched. Proceeding with build+test."
+
       # Checkout
       - uses: actions/checkout@v4
-      
+
       # Add Windows Defender Exclusions
       - uses: ./.github/actions/add-windowsdefender-exclusions
         if: runner.os == 'Windows'
