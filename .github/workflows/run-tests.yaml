@@ -22,6 +22,17 @@ jobs:
         os: [windows-latest, windows-11-arm]
     runs-on: ${{ matrix.os }}
     steps:
+      # DIAG: fail-fast if not AMD EPYC 9V74 (hunting the CanDisassembleInlinableBenchmarks flake)
+      - name: Check runner CPU (diag)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          $cpu = (Get-CimInstance -ClassName Win32_Processor).Name
+          Write-Host "Runner CPU: $cpu"
+          if ($cpu -notmatch 'EPYC 9V74') {
+            Write-Host "Not AMD EPYC 9V74 - bailing"
+            exit 1
+          }
       # Checkout
       - uses: actions/checkout@v7
       # Add Windows Defender Exclusions
