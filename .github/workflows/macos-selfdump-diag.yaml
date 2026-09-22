@@ -48,6 +48,16 @@ jobs:
           ./repro/diag.sh 4-apphost-devmode          "$OUT/SelfDump"
           ./repro/diag.sh 5-dotnet-dll-devmode       dotnet "$OUT/SelfDump.dll"
           ./repro/diag.sh 6-apphost-entitled-devmode "$OUT/SelfDump-entitled"
+      # authd evaluates system.privilege.taskport with builtin:authenticate, a password prompt nobody answers on a headless runner.
+      - name: Cases, taskport right pre-authorized
+        if: always()
+        run: |
+          sudo pkill -9 createdump || true
+          sudo security authorizationdb read system.privilege.taskport > /tmp/taskport-before.plist 2>/dev/null; plutil -p /tmp/taskport-before.plist | head -20
+          sudo security authorizationdb write system.privilege.taskport allow
+          ./repro/diag.sh 7-apphost-taskport          "$OUT/SelfDump"
+          ./repro/diag.sh 8-dotnet-dll-taskport       dotnet "$OUT/SelfDump.dll"
+          ./repro/diag.sh 9-apphost-entitled-taskport "$OUT/SelfDump-entitled"
       - name: Kill leftovers
         if: always()
         run: sudo pkill -9 createdump || true; sudo pkill -9 SelfDump || true
