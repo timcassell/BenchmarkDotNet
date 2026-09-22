@@ -4,13 +4,15 @@ on:
   workflow_dispatch:
 jobs:
   diag:
-    name: diag (${{ matrix.os }})
+    name: diag (${{ matrix.os }}, ${{ matrix.scenario }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ macos-26, macos-26-intel, macos-15, macos-15-intel ]
+        os: [ macos-26, macos-15, macos-15-intel ]
+        # Each scenario gets a fresh runner, so no earlier hung authorization can affect it.
+        scenario: [ A-entitled-first, B-dotnet-first, C-allow-first, D-unentitled-then-entitled ]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    timeout-minutes: 20
     env:
       RESULTS: ${{ github.workspace }}/results
       OUT: repro/bin/Release/net10.0
@@ -21,13 +23,9 @@ jobs:
           dotnet-version: 10.0.x
       - name: Environment
         run: |
-          sw_vers; uname -m
-          sysctl -n machdep.cpu.brand_string; echo "kern.hv_vmm_present=$(sysctl -n kern.hv_vmm_present 2>/dev/null)"
-          echo "--- csrutil status"; csrutil status || true
-          echo "--- DevToolsSecurity"; DevToolsSecurity -status || true
-          echo "--- boot-args"; nvram boot-args 2>&1 || true
-          echo "--- id"; id
-          echo "--- dotnet"; command -v dotnet; dotnet --list-runtimes | grep NETCore.App
+          sw_vers; uname -m; echo "kern.hv_vmm_present=$(sysctl -n kern.hv_vmm_present 2>/dev/null)"
+          csrutil status || true; DevToolsSecurity -status || true
+          dotnet --list-runtimes | grep NETCore.App
       - name: Build
         run: |
           dotnet build repro -c Release -nologo -v q
@@ -36,33 +34,28 @@ jobs:
             '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
             '<plist version="1.0"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>' > /tmp/gta.plist
           codesign --force -s - --entitlements /tmp/gta.plist "$OUT/SelfDump-entitled"
-      - name: Cases, developer mode as found
+      - name: Scenario
         run: |
-          ./repro/diag.sh 1-apphost             "$OUT/SelfDump"
-          ./repro/diag.sh 2-dotnet-dll          dotnet "$OUT/SelfDump.dll"
-          ./repro/diag.sh 3-apphost-entitled    "$OUT/SelfDump-entitled"
-      - name: Cases, developer mode enabled
-        if: always()
-        run: |
-          sudo DevToolsSecurity -enable; DevToolsSecurity -status
-          ./repro/diag.sh 4-apphost-devmode          "$OUT/SelfDump"
-          ./repro/diag.sh 5-dotnet-dll-devmode       dotnet "$OUT/SelfDump.dll"
-          ./repro/diag.sh 6-apphost-entitled-devmode "$OUT/SelfDump-entitled"
-      # authd evaluates system.privilege.taskport with builtin:authenticate, a password prompt nobody answers on a headless runner.
-      - name: Cases, taskport right pre-authorized
-        if: always()
-        run: |
-          sudo pkill -9 createdump || true
-          sudo security authorizationdb read system.privilege.taskport > /tmp/taskport-before.plist 2>/dev/null; plutil -p /tmp/taskport-before.plist | head -20
-          sudo security authorizationdb write system.privilege.taskport allow
-          ./repro/diag.sh 7-apphost-taskport          "$OUT/SelfDump"
-          ./repro/diag.sh 8-dotnet-dll-taskport       dotnet "$OUT/SelfDump.dll"
-          ./repro/diag.sh 9-apphost-entitled-taskport "$OUT/SelfDump-entitled"
+          case "${{ matrix.scenario }}" in
+            A-entitled-first)
+              ./repro/diag.sh 1-apphost-entitled "$OUT/SelfDump-entitled"
+              ./repro/diag.sh 2-dotnet-dll       dotnet "$OUT/SelfDump.dll" ;;
+            B-dotnet-first)
+              ./repro/diag.sh 1-dotnet-dll       dotnet "$OUT/SelfDump.dll"
+              ./repro/diag.sh 2-apphost-entitled "$OUT/SelfDump-entitled" ;;
+            C-allow-first)
+              sudo security authorizationdb write system.privilege.taskport allow
+              ./repro/diag.sh 1-apphost          "$OUT/SelfDump"
+              ./repro/diag.sh 2-apphost-entitled "$OUT/SelfDump-entitled" ;;
+            D-unentitled-then-entitled)
+              ./repro/diag.sh 1-apphost          "$OUT/SelfDump"
+              ./repro/diag.sh 2-apphost-entitled "$OUT/SelfDump-entitled" ;;
+          esac
       - name: Kill leftovers
         if: always()
         run: sudo pkill -9 createdump || true; sudo pkill -9 SelfDump || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: diag-${{ matrix.os }}
+          name: diag-${{ matrix.os }}-${{ matrix.scenario }}
           path: results
