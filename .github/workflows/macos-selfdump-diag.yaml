@@ -1,0 +1,58 @@
+name: macos-selfdump-diag
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  diag:
+    name: diag (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ macos-26, macos-26-intel, macos-15, macos-15-intel ]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    env:
+      RESULTS: ${{ github.workspace }}/results
+      OUT: repro/bin/Release/net10.0
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Environment
+        run: |
+          sw_vers; uname -m
+          sysctl -n machdep.cpu.brand_string; echo "kern.hv_vmm_present=$(sysctl -n kern.hv_vmm_present 2>/dev/null)"
+          echo "--- csrutil status"; csrutil status || true
+          echo "--- DevToolsSecurity"; DevToolsSecurity -status || true
+          echo "--- boot-args"; nvram boot-args 2>&1 || true
+          echo "--- id"; id
+          echo "--- dotnet"; command -v dotnet; dotnet --list-runtimes | grep NETCore.App
+      - name: Build
+        run: |
+          dotnet build repro -c Release -nologo -v q
+          cp "$OUT/SelfDump" "$OUT/SelfDump-entitled"
+          printf '%s\n' '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
+            '<plist version="1.0"><dict><key>com.apple.security.get-task-allow</key><true/></dict></plist>' > /tmp/gta.plist
+          codesign --force -s - --entitlements /tmp/gta.plist "$OUT/SelfDump-entitled"
+      - name: Cases, developer mode as found
+        run: |
+          ./repro/diag.sh 1-apphost             "$OUT/SelfDump"
+          ./repro/diag.sh 2-dotnet-dll          dotnet "$OUT/SelfDump.dll"
+          ./repro/diag.sh 3-apphost-entitled    "$OUT/SelfDump-entitled"
+      - name: Cases, developer mode enabled
+        if: always()
+        run: |
+          sudo DevToolsSecurity -enable; DevToolsSecurity -status
+          ./repro/diag.sh 4-apphost-devmode          "$OUT/SelfDump"
+          ./repro/diag.sh 5-dotnet-dll-devmode       dotnet "$OUT/SelfDump.dll"
+          ./repro/diag.sh 6-apphost-entitled-devmode "$OUT/SelfDump-entitled"
+      - name: Kill leftovers
+        if: always()
+        run: sudo pkill -9 createdump || true; sudo pkill -9 SelfDump || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: diag-${{ matrix.os }}
+          path: results
